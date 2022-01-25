@@ -5,8 +5,8 @@ library(shinyWidgets)
 
 source("./functions.R")
 
-#which users should have access to data?
-USG = c("agency only", "interagency only", "global Agency", "global only")
+#which users should have access to data? IN THIS CASE ONLY USG FOLKS
+USG_USERS = c("agency only", "interagency only", "global Agency", "global only")
 
 # ui -----
 ui <- shinyUI(
@@ -107,6 +107,39 @@ server <- function(input, output, session) {
                                password = input$password,
                                d2_session_envir = parent.env(environment())
       )
+      
+      # DISALLOW USER ACCESS TO THE APP-----
+      
+      # access data streams
+      d <- getStreams(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"))
+      # classify a user
+      d <- getUserType(d$stream)
+      
+      #if a user is not to be allowed deny them entry
+      if (!d %in% USG_USERS) {
+        
+        # alert the user they cannot access the app
+        sendSweetAlert(
+          session,
+          title = "Login failed",
+          text = "You are not authorized to use this application",
+          type = "error"
+        )
+        
+        # log them out
+        Sys.sleep(3)
+        flog.info(paste0("User ", user_input$d2_session$me$userCredentials$username, " logged out."))
+        user_input$authenticated  <-  FALSE
+        user_input$user_name <- ""
+        user_input$authorized  <-  FALSE
+        user_input$d2_session  <-  NULL
+        d2_default_session <- NULL
+        gc()
+        session$reload()
+      
+      }
+      
+      # ------
     },
     # This function throws an error if the login is not successful
     error = function(e) {
@@ -170,7 +203,7 @@ server <- function(input, output, session) {
     d <- getStreams(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"))
     d <- getUserType(d$stream)
     
-    if(d %in% USG) {
+    if(d %in% USG_USERS) {
       my_cat_ops <- getMechs(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"), by= "cocuid")
       
       output$table <- renderDataTable(my_cat_ops,
@@ -180,7 +213,7 @@ server <- function(input, output, session) {
                                       )
       )
     } else {
-      access_denied <- paste("You are not allowed to see this information. Only",Sys.getenv("USER_TYPE"), "user types are allowed to see this information.")
+      access_denied <- paste("You are not allowed to see this information.")
       output$message <- renderPrint({ access_denied })  
     }
     
@@ -192,7 +225,7 @@ server <- function(input, output, session) {
     d <- getStreams(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"))
     d <- getUserType(d$stream)
     
-    if(d %in% USG) {
+    if(d %in% USG_USERS) {
     
     my_cat_ops <- getMechs(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"), by= "mech_id")
     
@@ -203,7 +236,7 @@ server <- function(input, output, session) {
                                     )
     )
     } else {
-      access_denied <- paste("You are not allowed to see this information. Only",Sys.getenv("USER_TYPE"), "user types are allowed to see this information.")
+      access_denied <- paste("You are not allowed to see this information.")
       output$message <- renderPrint({ access_denied })  
       
     }
@@ -216,7 +249,7 @@ server <- function(input, output, session) {
     d <- getStreams(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"))
     d <- getUserType(d$stream)
     
-    if(d %in% USG) {
+    if(d %in% USG_USERS) {
       
     
     my_cat_ops <- getMechs(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"), by= "mech_name")
@@ -228,7 +261,7 @@ server <- function(input, output, session) {
                                     )
     )
     } else {
-      access_denied <- paste("You are not allowed to see this information. Only",Sys.getenv("USER_TYPE"), "user types are allowed to see this information.")
+      access_denied <- paste("You are not allowed to see this information.")
       output$message <- renderPrint({ access_denied })    
     }
     
