@@ -16,7 +16,7 @@
 #' @param base_url base_url The URL of the server, e.g. https://www.datim.org/. 
 #' @param by the id mechanisms should be pulled by, e.g. cocuid, mech_id, mech_name
 
-getMechs <- function(username, password, base_url, by="cocuid") {
+getMechs <- function(username, password, base_url) {
   
   #stop if username and password are not entered
   if((!(is.null(username)) && is.null(password)) || (is.null(username) && !(is.null(password)))){
@@ -36,30 +36,11 @@ getMechs <- function(username, password, base_url, by="cocuid") {
   
   # process api content
   json <- httr::content(req)
-  col_names <- c("mech_id", "category_option_combos_id", "name")
+  col_names <- c("mech_code", "category_option_combos_id", "name")
   my_cat_ops <- unstack(data.frame(d<-unlist(json),names(d)))[,c(1,2,3)]
   names(my_cat_ops) <- col_names
   
-  #process json differently depending on the return value desired
-  if (by=="cocuid") {
-    
-    #return by category option combo id
-    return(my_cat_ops[,c("category_option_combos_id", "name")])
-    
-  } else if (by == "mech_id") {
-    
-    #return by mech number
-    return(my_cat_ops[,c("mech_id", "name")])
-    
-  } else if (by == "mech_name")  {
-    
-    #return by mech name
-    return(my_cat_ops[,c("name"), drop=FALSE])
-    
-  } else {
-    
-    return(my_cat_ops)
-  }
+  return(my_cat_ops)  
 }
 
 #' @export
@@ -170,4 +151,7 @@ getUserType <- function(streams) {
 #smokeAgency - Agency
 #smokeIP - Partner
 #smokeMOH - MOH
+
+
+
 

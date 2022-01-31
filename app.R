@@ -5,8 +5,9 @@ library(shinyWidgets)
 
 source("./functions.R")
 
-#which users should have access to data? IN THIS CASE ONLY USG FOLKS
-USG_USERS = c("agency only", "interagency only", "global Agency", "global only")
+# which users should have access to data? IN THIS CASE ONLY PARTNERS - USG FOLKS SEE EVERYTHING, PARTNERS LIMITED TO MECH ACCESS
+USG_USERS = c("agency only", "interagency only", "global agency", "global only")
+PARTNER_USERS = c("global partner", "partner only")
 
 # ui -----
 ui <- shinyUI(
@@ -16,13 +17,15 @@ ui <- shinyUI(
 # server ----
 server <- function(input, output, session) {
   
-  #user information
+  print(Sys.getenv("BASE_URL"))
+  
+  # user information
   user_input  <-  reactiveValues(authenticated = FALSE,
                                  status = "",
                                  d2_session = NULL,
                                  memo_authorized = FALSE)
   
-  #is the user authenticated?
+  # is the user authenticated?
   output$ui <- renderUI({
     if(user_input$authenticated == FALSE) {
       uiOutput("uiLogin")
@@ -31,7 +34,7 @@ server <- function(input, output, session) {
     }
   })
   
-  #login page with username and password
+  # login page with username and password
   output$uiLogin  <-  renderUI({
     
     fluidPage(
@@ -50,7 +53,7 @@ server <- function(input, output, session) {
     
   })
   
-  #once you login this page shows up
+  # once you login this page shows up
   output$authenticated <- renderUI({ 
     fluidPage(
       fluidRow(
@@ -60,19 +63,23 @@ server <- function(input, output, session) {
         column(
           br(),
           br(),
-          actionButton("groupid_button", "My User Groups aka Streams"),
+          actionButton("groupid_button", "Streams"),
           br(),
           br(),
-          actionButton("me_button", "What is my User Type"),
+          actionButton("me_button", "User Type"),
           br(),
           br(),
-          actionButton("mech_cocuid_button", "My Mechanisms by Category Option Combos Id"),
+          actionButton("mech_cocuid_button", "Mechanisms by Category Option Combos Id"),
           br(),     
           br(),
-          actionButton("mech_id_button", "My Mechanisms by Mech Number"),
+          actionButton("mech_id_button", "Mechanisms by Mech Code"),
           br(),
           br(),
-          actionButton("mech_name_button", "My Mechanisms by Name"),
+          actionButton("mech_name_button", "Mechanisms by Name"),
+          br(),
+          br(),
+          actionButton("test_data", "Test Data"),
+          br(),
           br(),
           width = 6
         ),
@@ -99,7 +106,12 @@ server <- function(input, output, session) {
     )  
   })
   
-  #Login process
+  # User and mechanisms reactive value pulled only once ----
+  user <- reactiveValues(type = NULL)
+  mechanisms <- reactiveValues(my_cat_ops = NULL)
+  userGroups <- reactiveValues(streams = NULL)
+  
+  # Login process ----
   observeEvent(input$login_button, {
     tryCatch({
       datimutils::loginToDATIM(base_url = Sys.getenv("BASE_URL"),
@@ -110,18 +122,23 @@ server <- function(input, output, session) {
       
       # DISALLOW USER ACCESS TO THE APP-----
       
-      # access data streams
-      d <- getStreams(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"))
-      # classify a user
-      d <- getUserType(d$stream)
+      # access data streams and classify a user and pull mechs
+      s <- getStreams(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"))
+      u <- getUserType(s$stream)
+      my_cat_ops <- getMechs(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"))
       
-      #if a user is not to be allowed deny them entry
+      # store data so call is made only once
+      user$type <- u
+      mechanisms$my_cat_ops <- my_cat_ops
+      userGroups$streams <-  s
+      
+      # if a user is not to be allowed deny them entry
       if (!d %in% USG_USERS) {
         
         # alert the user they cannot access the app
         sendSweetAlert(
           session,
-          title = "Login failed",
+          title = "YOU CANNOT LOG IN",
           text = "You are not authorized to use this application",
           type = "error"
         )
@@ -136,10 +153,8 @@ server <- function(input, output, session) {
         d2_default_session <- NULL
         gc()
         session$reload()
-      
+        
       }
-      
-      # ------
     },
     # This function throws an error if the login is not successful
     error = function(e) {
@@ -181,96 +196,76 @@ server <- function(input, output, session) {
   })
   
   
-  #show user information
+  # show user information ----
   observeEvent(input$me_button, {
-    d <- getStreams(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"))
-    d <- getUserType(d$stream)
-    output$message <- renderPrint({d})
+    output$message <- renderPrint({ user$type })
   })
   
-  #show group ids data
+  # show streams ids data ----
   observeEvent(input$groupid_button, {
     
-    groups_id_df <- getStreams(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"))
+    groups_id_df <- userGroups$streams
     groups_id_df_f <- groups_id_df[!grepl("^Global|OU", groups_id_df$stream),,drop = F]
-    output$message <- renderPrint({groups_id_df_f})
+    
+    # display streams
+    output$message <- renderPrint({ groups_id_df_f })
+    
   })
   
   
-  #show mechs by cocuid
+  # show mechs by cocuid ----
   observeEvent(input$mech_cocuid_button, {
     
-    d <- getStreams(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"))
-    d <- getUserType(d$stream)
-    
-    if(d %in% USG_USERS) {
-      my_cat_ops <- getMechs(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"), by= "cocuid")
-      
-      output$table <- renderDataTable(my_cat_ops,
-                                      options = list(
-                                        pageLength = 10,
-                                        initComplete = I("function(settings, json) {alert('Done.');}")
-                                      )
-      )
-    } else {
-      access_denied <- paste("You are not allowed to see this information.")
-      output$message <- renderPrint({ access_denied })  
-    }
+    # display mechanisms  
+    output$table <- renderDataTable(mechanisms$my_cat_ops[,c("category_option_combos_id", "name")],
+                                    options = list(
+                                      pageLength = 10
+                                    )
+    )
     
   })
   
-  #show mechs by mechs id
+  # show mechs by mechs code----
   observeEvent(input$mech_id_button, {
     
-    d <- getStreams(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"))
-    d <- getUserType(d$stream)
-    
-    if(d %in% USG_USERS) {
-    
-    my_cat_ops <- getMechs(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"), by= "mech_id")
-    
-    output$table <- renderDataTable(my_cat_ops,
+    # display mechanisms  
+    output$table <- renderDataTable(mechanisms$my_cat_ops[,c("mech_code", "name")],
                                     options = list(
-                                      pageLength = 10,
-                                      initComplete = I("function(settings, json) {alert('Done.');}")
+                                      pageLength = 10
                                     )
     )
-    } else {
-      access_denied <- paste("You are not allowed to see this information.")
-      output$message <- renderPrint({ access_denied })  
-      
-    }
     
   })
   
-  #show mechs by name
+  # show mechs by name ----
   observeEvent(input$mech_name_button, {
     
-    d <- getStreams(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"))
-    d <- getUserType(d$stream)
-    
-    if(d %in% USG_USERS) {
-      
-    
-    my_cat_ops <- getMechs(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"), by= "mech_name")
-    
-    output$table <- renderDataTable(my_cat_ops,
+    # display mechanisms 
+    output$table <- renderDataTable(mechanisms$my_cat_ops[,c("name"), drop=FALSE],
                                     options = list(
-                                      pageLength = 10,
-                                      initComplete = I("function(settings, json) {alert('Done.');}")
+                                      pageLength = 10
                                     )
     )
-    } else {
-      access_denied <- paste("You are not allowed to see this information.")
-      output$message <- renderPrint({ access_denied })    
-    }
     
+    
+  })
+  
+  # test data button ----
+  observeEvent(input$test_data, {
+      
+      # Show all test data 
+      output$table <- renderDataTable(sample_data,
+                                      options = list(
+                                        pageLength = 10
+                                      )
+      )
+      
     
   })
   
   
   
-  #logout process
+  # logout process ----
   observeEvent(input$logout_button, {
     flog.info(paste0("User ", user_input$d2_session$me$userCredentials$username, " logged out."))
     user_input$authenticated  <-  FALSE
