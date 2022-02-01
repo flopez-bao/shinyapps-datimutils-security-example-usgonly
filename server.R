@@ -3,21 +3,14 @@ library(shiny)
 library(futile.logger)
 library(shinyWidgets)
 
-source("./functions.R")
+source("./read_data.R")
 
 # which users should have access to data? IN THIS CASE ONLY PARTNERS - USG FOLKS SEE EVERYTHING, PARTNERS LIMITED TO MECH ACCESS
 USG_USERS = c("agency only", "interagency only", "global agency", "global only")
 PARTNER_USERS = c("global partner", "partner only")
 
-# ui -----
-ui <- shinyUI(
-  uiOutput("ui")
-)
-
 # server ----
 server <- function(input, output, session) {
-  
-  print(Sys.getenv("BASE_URL"))
   
   # user information
   user_input  <-  reactiveValues(authenticated = FALSE,
@@ -123,9 +116,9 @@ server <- function(input, output, session) {
       # DISALLOW USER ACCESS TO THE APP-----
       
       # access data streams and classify a user and pull mechs
-      s <- getStreams(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"))
-      u <- getUserType(s$stream)
-      my_cat_ops <- getMechs(username = input$user_name, password = input$password, base_url = Sys.getenv("BASE_URL"))
+      s <- datimutils::getMyStreams()
+      u <- datimutils::getMyUserType()
+      my_cat_ops <- datimutils::listMechs()
       
       # store data so call is made only once
       user$type <- u
@@ -203,9 +196,8 @@ server <- function(input, output, session) {
   
   # show streams ids data ----
   observeEvent(input$groupid_button, {
-    
     groups_id_df <- userGroups$streams
-    groups_id_df_f <- groups_id_df[!grepl("^Global|OU", groups_id_df$stream),,drop = F]
+    groups_id_df_f <- groups_id_df[!grepl("^Global|OU", groups_id_df)]
     
     # display streams
     output$message <- renderPrint({ groups_id_df_f })
@@ -217,7 +209,7 @@ server <- function(input, output, session) {
   observeEvent(input$mech_cocuid_button, {
     
     # display mechanisms  
-    output$table <- renderDataTable(mechanisms$my_cat_ops[,c("category_option_combos_id", "name")],
+    output$table <- renderDataTable(mechanisms$my_cat_ops[,c("combo_id", "name")],
                                     options = list(
                                       pageLength = 10
                                     )
@@ -252,17 +244,16 @@ server <- function(input, output, session) {
   
   # test data button ----
   observeEvent(input$test_data, {
-      
-      # Show all test data 
+    
+
+      # USG users can see all the data
       output$table <- renderDataTable(sample_data,
                                       options = list(
                                         pageLength = 10
                                       )
       )
-      
     
   })
-  
   
   
   # logout process ----
@@ -277,5 +268,3 @@ server <- function(input, output, session) {
     session$reload()
   })
 }
-shinyApp(ui, server)
-
