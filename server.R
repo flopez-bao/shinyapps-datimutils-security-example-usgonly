@@ -6,8 +6,8 @@ library(shinyWidgets)
 source("./read_data.R")
 
 # which users should have access to data? IN THIS CASE ONLY PARTNERS - USG FOLKS SEE EVERYTHING, PARTNERS LIMITED TO MECH ACCESS
-USG_USERS = c("agency only", "interagency only", "global agency", "global only")
-PARTNER_USERS = c("global partner", "partner only")
+USG_USERS = c("Agency", "Interagency", "Global Agency", "Global")
+PARTNER_USERS = c("Global Partner", "Partner")
 
 # server ----
 server <- function(input, output, session) {
@@ -115,18 +115,13 @@ server <- function(input, output, session) {
       
       # DISALLOW USER ACCESS TO THE APP-----
       
-      # access data streams and classify a user and pull mechs
-      s <- datimutils::getMyStreams()
-      u <- datimutils::getMyUserType()
-      my_cat_ops <- datimutils::listMechs()
-      
       # store data so call is made only once
-      user$type <- u
-      mechanisms$my_cat_ops <- my_cat_ops
-      userGroups$streams <-  s
+      userGroups$streams <-  datimutils::getMyStreams()
+      user$type <- datimutils::getMyUserType()
+      mechanisms$my_cat_ops <- datimutils::listMechs()
       
       # if a user is not to be allowed deny them entry
-      if (!d %in% USG_USERS) {
+      if (!user$type %in% USG_USERS) {
         
         # alert the user they cannot access the app
         sendSweetAlert(
